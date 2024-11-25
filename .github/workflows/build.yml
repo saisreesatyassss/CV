@@ -1,3 +1,78 @@
+# name: Build and Deploy CV
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     env:
+#       DIR: .
+#       FILE: cv
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Compile LaTeX
+#         uses: dante-ev/latex-action@latest
+#         with:
+#           root_file: ${{ env.FILE }}.tex
+#           working_directory: ${{ env.DIR }}
+
+#       - name: Move PDF to artifacts directory
+#         run: mkdir -p github_artifacts && mv ${{ env.DIR }}/${{ env.FILE }}.pdf github_artifacts/
+
+#       - name: Upload PDF as artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: pdf_artifact
+#           path: github_artifacts
+
+#   deploy:
+#     needs: build
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Download artifact
+#         uses: actions/download-artifact@v4
+#         with:
+#           name: pdf_artifact
+#           path: github_artifacts
+
+#       - name: Move artifacts to deploy directory
+#         run: mkdir -p github_deploy && mv github_artifacts/* github_deploy/
+
+#       - name: Deploy to GitHub Pages on orphan branch
+#         uses: peaceiris/actions-gh-pages@v4
+#         with:
+#           github_token: ${{ secrets.GITHUB_TOKEN }}
+#           publish_dir: github_deploy
+#           publish_branch: build
+#           force_orphan: true
+#           enable_jekyll: true
+
+#   copy-index-to-build:
+#     needs: deploy
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout repository with full history
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+
+#       - name: Copy index.html and CNAME to main branch
+#         uses: planetoftheweb/copy-to-branches@v1.3
+#         env:
+#           key: main
+#           files: index.html CNAME
+
 name: Build and Deploy CV
 
 on:
@@ -9,8 +84,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      DIR: .
-      FILE: cv
+      DIR: . # Directory containing the LaTeX file
+      FILE: cv # Name of the LaTeX file (without the .tex extension)
 
     steps:
       - name: Checkout repository
@@ -29,7 +104,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pdf_artifact
-          path: github_artifacts
+          path: github_artifacts/
 
   deploy:
     needs: build
@@ -43,32 +118,35 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: pdf_artifact
-          path: github_artifacts
 
-      - name: Move artifacts to deploy directory
+      - name: Prepare deployment directory
         run: mkdir -p github_deploy && mv github_artifacts/* github_deploy/
 
-      - name: Deploy to GitHub Pages on orphan branch
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: github_deploy
-          publish_branch: build
+          publish_branch: gh-pages
           force_orphan: true
           enable_jekyll: true
 
-  copy-index-to-build:
+  copy-index-to-main:
     needs: deploy
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository with full history
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Copy index.html and CNAME to main branch
-        uses: planetoftheweb/copy-to-branches@v1.3
-        env:
-          key: main
-          files: index.html CNAME
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cp github_deploy/index.html index.html
+          cp github_deploy/CNAME CNAME || echo "No CNAME file found"
+          git add index.html CNAME
+          git commit -m "Update index.html and CNAME"
+          git push origin main
